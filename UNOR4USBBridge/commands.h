@@ -128,6 +128,14 @@ enum {
 #define _PREF_LEN             "+PREFLEN"
 #define _PREF_STAT            "+PREFSTAT"
 
+#define _SOFTSE_SERIAL        "+SOFTSE_SERIAL"
+#define _SOFTSE_RND           "+SOFTSE_RND"
+#define _SOFTSE_PRI_KEY       "+SOFTSE_PRI_KEY"
+#define _SOFTSE_PUB_KEY       "+SOFTSE_PUB_KEY"
+#define _SOFTSE_WRITE_SLOT    "+SOFTSE_WRITE_SLOT"
+#define _SOFTSE_READ_SLOT     "+SOFTSE_READ_SLOT"
+
+
 
 #define CMD(x)             _AT x _ENDL
 #define PROMPT(x)          x ":"
