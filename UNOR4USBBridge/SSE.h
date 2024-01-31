@@ -26,9 +26,13 @@ class Arduino_UNOWIFIR4_SSE
 {
 
 public:
- static int generatePrivateKey(const char* keyID, uint8_t publicKey[]);
- static int generatePublicKey(const char* keyID, uint8_t publicKey[]);
-
+ static int generateECKeyPair(unsigned char* der, int maxLen);
+ static int exportECKeyXY(const unsigned char* der, int len, uint8_t publicKey[]);
+ static int importECKeyXY(uint8_t publicKey[], unsigned char* der, int len);
+ //static int exportPubKey(const unsigned char* inder, int inlen, unsigned char* outder, int outlen);
+ static int sign(const unsigned char* der, int len, const unsigned char* sha256, unsigned char* signature);
+ static int verify(const unsigned char* der, int len, const unsigned char* sha256, unsigned char* signature);
+ static int sha256(const unsigned char* message, int len, unsigned char* sha256);
 
 private:
 
