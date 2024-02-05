@@ -57,6 +57,7 @@ enum {
 #define _CLIENTCONNECTED         "+CLIENTCONNECTED"
 #define _SSLBEGINCLIENT          "+SSLBEGINCLIENT"
 #define _SETCAROOT               "+SETCAROOT"
+#define _SETECCSLOT              "+SETECCSLOT"
 #define _SSLCLIENTSTATE          "+SSLCLIENTSTATE"
 #define _SSLCLIENTCONNECTNAME    "+SSLCLIENTCONNECTNAME"
 #define _SETIP                   "+SETIP"
