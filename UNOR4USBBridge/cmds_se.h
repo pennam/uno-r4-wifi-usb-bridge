@@ -119,7 +119,7 @@ void CAtHandler::add_cmds_se() {
             int ret = 0;
 
             std::vector<unsigned char> der;
-            der.resize(128);
+            der.resize(SSE_EC256_DER_PUB_KEY_LENGTH);
             if ((len = Arduino_UNOWIFIR4_SSE::generateECKeyPair(der.data(), static_cast<int>(der.size()))) < 0) {
                DEBUG_ERROR(" failed\n  !  generateECKeyPair returned -0x%04x", (unsigned int) -ret);
                return chAT::CommandStatus::ERROR;
@@ -135,8 +135,8 @@ void CAtHandler::add_cmds_se() {
 #endif
 
             std::vector<uint8_t> data;
-            data.resize(128);
-            if ((len = Arduino_UNOWIFIR4_SSE::exportECKeyXY(der.data(), static_cast<int>(der.size()), data.data())) < 0) {
+            data.resize(SSE_EC256_PUB_KEY_LENGTH);
+            if ((len = Arduino_UNOWIFIR4_SSE::exportECKeyXY(der.data(), static_cast<int>(der.size()), data.data())) != SSE_EC256_PUB_KEY_LENGTH) {
                DEBUG_ERROR(" failed\n  !  exportECKeyXY returned -0x%04x", (unsigned int) -ret);
                return chAT::CommandStatus::ERROR;
             }
@@ -178,8 +178,8 @@ void CAtHandler::add_cmds_se() {
             log_buf_v((const uint8_t *)der.data(), len);
 #endif
             std::vector<uint8_t> data;
-            data.resize(128);
-            if ((len = Arduino_UNOWIFIR4_SSE::exportECKeyXY(der.data(), static_cast<int>(der.size()), data.data())) < 0) {
+            data.resize(SSE_EC256_PUB_KEY_LENGTH);
+            if ((len = Arduino_UNOWIFIR4_SSE::exportECKeyXY(der.data(), static_cast<int>(der.size()), data.data())) != SSE_EC256_PUB_KEY_LENGTH) {
                DEBUG_ERROR(" failed\n  !  exportECKeyXY returned -0x%04x", (unsigned int) -len);
                return chAT::CommandStatus::ERROR;
             }
@@ -266,8 +266,8 @@ void CAtHandler::add_cmds_se() {
 
             /* sign message/digest/sha256 stored in se_buffer */
             std::vector<uint8_t> data;
-            data.resize(64);
-            if ((ret = Arduino_UNOWIFIR4_SSE::sign(der.data(), len, se_buf.data(), data.data())) != 64) {
+            data.resize(SSE_EC256_SIGNATURE_LENGTH);
+            if ((ret = Arduino_UNOWIFIR4_SSE::sign(der.data(), len, se_buf.data(), data.data())) != SSE_EC256_SIGNATURE_LENGTH) {
                DEBUG_ERROR(" failed\n  !  sign returned -0x%04x", (unsigned int) -ret);
             }
 
@@ -304,8 +304,8 @@ void CAtHandler::add_cmds_se() {
 
             /* Import public key from buffer */
             std::vector<unsigned char> pub;
-            pub.resize(128);
-            if ((ret = Arduino_UNOWIFIR4_SSE::importECKeyXY(&se_buf.data()[96], pub.data(), 128)) < 0) {
+            pub.resize(SSE_EC256_DER_PUB_KEY_LENGTH);
+            if ((ret = Arduino_UNOWIFIR4_SSE::importECKeyXY(&se_buf.data()[SSE_SHA256_LENGTH + SSE_EC256_SIGNATURE_LENGTH], pub.data(), SSE_EC256_DER_PUB_KEY_LENGTH)) < 0) {
                DEBUG_ERROR(" failed\n  !  importECKeyXY returned -0x%04x", (unsigned int) -ret);
                return chAT::CommandStatus::ERROR;
             }
@@ -320,7 +320,7 @@ void CAtHandler::add_cmds_se() {
 #endif
 
             /* Verify data */
-            if ((ret = Arduino_UNOWIFIR4_SSE::verify(pub.data(), ret, &se_buf.data()[0], &se_buf.data()[32])) != 0) {
+            if ((ret = Arduino_UNOWIFIR4_SSE::verify(pub.data(), ret, &se_buf.data()[0], &se_buf.data()[SSE_SHA256_LENGTH])) != 0) {
                DEBUG_ERROR(" failed\n  !  verify returned -0x%04x", (unsigned int) -ret);
             }
             srv.write_response_prompt();
@@ -347,8 +347,8 @@ void CAtHandler::add_cmds_se() {
 
             /* sign message/digest/sha256 stored in se_buffer */
             std::vector<unsigned char> data;
-            data.resize(32);
-            if ((ret = Arduino_UNOWIFIR4_SSE::sha256(se_buf.data(), se_buf.size(), data.data())) != 32) {
+            data.resize(SSE_SHA256_LENGTH);
+            if ((ret = Arduino_UNOWIFIR4_SSE::sha256(se_buf.data(), se_buf.size(), data.data())) != SSE_SHA256_LENGTH) {
                DEBUG_ERROR(" failed\n  !  sse.getBytes returned -0x%04x", (unsigned int) -ret);
             }
 

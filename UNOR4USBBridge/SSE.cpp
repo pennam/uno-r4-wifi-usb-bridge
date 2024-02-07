@@ -24,7 +24,14 @@
 
 #include "SSE.h"
 
-// New implementation from mbedtls not merged https://github.com/Mbed-TLS/mbedtls/pull/8703/files
+/******************************************************************************
+   LOCAL MODULE FUNCTIONS
+ ******************************************************************************/
+
+/*
+ * Keep an eye on this new implementation from mbedtls not yet merged
+ * https://github.com/Mbed-TLS/mbedtls/pull/8703/files
+ */
 
 /*
  * https://github.com/Mbed-TLS/mbedtls/blob/aa3fa98bc4a99d21a973b891bf7bda9a27647068/library/pk_wrap.c#L543
@@ -124,14 +131,14 @@ static int ecdsa_signature_to_asn1(const mbedtls_mpi *r, const mbedtls_mpi *s,
    PUBLIC MEMBER FUNCTIONS
  ******************************************************************************/
 
-int Arduino_UNOWIFIR4_SSE::generateECKeyPair(unsigned char* der, int maxLen)
+int Arduino_UNOWIFIR4_SSE::generateECKeyPair(unsigned char* derKey, int maxLen)
 {
   int ret = 1;
   mbedtls_pk_context key;
   mbedtls_ctr_drbg_context ctr_drbg;
   mbedtls_entropy_context entropy;
   const char *pers = "gen_key";
-  unsigned char tmp[128] = {0};
+  unsigned char mbedtls_buf[SSE_EC256_DER_PRI_KEY_LENGTH] = { 0 };
 
   mbedtls_pk_init(&key);
   mbedtls_entropy_init(&entropy);
@@ -152,12 +159,19 @@ int Arduino_UNOWIFIR4_SSE::generateECKeyPair(unsigned char* der, int maxLen)
     goto exit;
   }
 
-  if ((ret = mbedtls_pk_write_key_der(&key, tmp, sizeof(tmp))) < 0) {
+  if ((ret = mbedtls_pk_write_key_der(&key, mbedtls_buf, sizeof(mbedtls_buf))) < 0) {
     DEBUG_ERROR(" failed\n  !  mbedtls_pk_write_key_der returned -0x%04x", (unsigned int) -ret);
     goto exit;
   }
 
-  memcpy(der, &tmp[sizeof(tmp)- ret], ret);
+  if (ret > maxLen) {
+    DEBUG_ERROR(" failed\n  !  output buffer too small operation needs 0x%04x bytes", (unsigned int) ret);
+    ret = MBEDTLS_ERR_ECP_BUFFER_TOO_SMALL;
+    goto exit;
+  }
+
+  /* Copy data from the end of mbedtls_buf buffer to der output */
+  memcpy(derKey, &mbedtls_buf[sizeof(mbedtls_buf) - ret], ret);
 
 exit:
   mbedtls_ctr_drbg_free(&ctr_drbg);
@@ -167,7 +181,7 @@ exit:
   return ret;
 }
 
-int Arduino_UNOWIFIR4_SSE::exportECKeyXY(const unsigned char* der, int len, uint8_t publicKey[])
+int Arduino_UNOWIFIR4_SSE::exportECKeyXY(const unsigned char* derKey, int derLen, unsigned char* pubXY)
 {
   int ret = 1;
   mbedtls_pk_context key;
@@ -176,7 +190,7 @@ int Arduino_UNOWIFIR4_SSE::exportECKeyXY(const unsigned char* der, int len, uint
   mbedtls_pk_init(&key);
 
   /* Check if we can use parse public key */
-  if ((ret = mbedtls_pk_parse_key(&key, der, len, NULL, 0)) != 0) {
+  if ((ret = mbedtls_pk_parse_key(&key, derKey, derLen, NULL, 0)) != 0) {
     DEBUG_ERROR(" failed\n  !  mbedtls_pk_parse_key returned -0x%04x", (unsigned int) -ret);
     goto exit;
   }
@@ -188,20 +202,29 @@ int Arduino_UNOWIFIR4_SSE::exportECKeyXY(const unsigned char* der, int len, uint
 
   /* Get elliptic curve point */
   ecp = mbedtls_pk_ec(key);
-  mbedtls_mpi_write_binary(&ecp->Q.X, &publicKey[0],  32);
-  mbedtls_mpi_write_binary(&ecp->Q.Y, &publicKey[32], 32);
-  ret = 64;
+  if ((ret = mbedtls_mpi_write_binary(&ecp->Q.X, &pubXY[0], SSE_EC256_X_LENGTH)) != 0) {
+    DEBUG_ERROR(" failed\n  !  mbedtls_mpi_write_binary Q.X returned -0x%04x", (unsigned int) -ret);
+    goto exit;
+  }
+
+  if ((ret = mbedtls_mpi_write_binary(&ecp->Q.Y, &pubXY[SSE_EC256_X_LENGTH], SSE_EC256_Y_LENGTH)) != 0) {
+    DEBUG_ERROR(" failed\n  !  mbedtls_mpi_write_binary Q.XYreturned -0x%04x", (unsigned int) -ret);
+    goto exit;
+  }
+
+  /* Success */
+  ret = SSE_EC256_PUB_KEY_LENGTH;
 
 exit:
   mbedtls_pk_free(&key);
   return ret;
 }
 
-int Arduino_UNOWIFIR4_SSE::importECKeyXY(uint8_t publicKey[], unsigned char* der, int len)
+int Arduino_UNOWIFIR4_SSE::importECKeyXY(const unsigned char* pubXY, unsigned char* derKey, int maxLen)
 {
   int ret = 1;
   mbedtls_pk_context key;
-  unsigned char tmp[128] = {0};
+  unsigned char mbedtls_buf[SSE_EC256_DER_PUB_KEY_LENGTH] = { 0 };
   mbedtls_ecp_keypair* ecp;
 
   mbedtls_pk_init(&key);
@@ -223,24 +246,30 @@ int Arduino_UNOWIFIR4_SSE::importECKeyXY(uint8_t publicKey[], unsigned char* der
     goto exit;
   }
 
-  tmp[0] = 0x04;
-  memcpy(&tmp[1], publicKey, 64);
+  /*
+   * Add uncompressed flag  {0x04 | X | Y }
+   * https://github.com/Mbed-TLS/mbedtls/blob/f660c7c92308b6080f8ca97fa1739370d1b2fab5/include/psa/crypto.h#L783
+   */
+  mbedtls_buf[0] = 0x04; memcpy(&mbedtls_buf[1], pubXY, SSE_EC256_PUB_KEY_LENGTH);
 
-  if (( ret = mbedtls_ecp_point_read_binary(&ecp->grp, &ecp->Q, tmp, 65)) != 0) {
+  if (( ret = mbedtls_ecp_point_read_binary(&ecp->grp, &ecp->Q, mbedtls_buf, SSE_EC256_PUB_KEY_LENGTH + 1)) != 0) {
     DEBUG_ERROR(" failed\n  !  mbedtls_ecp_point_read_binary returned -0x%04x", (unsigned int) -ret);
     goto exit;
   }
 
-  if ((ret = mbedtls_pk_write_pubkey_der(&key, tmp, sizeof(tmp))) < 0) {
+  if ((ret = mbedtls_pk_write_pubkey_der(&key, mbedtls_buf, sizeof(mbedtls_buf))) < 0) {
     DEBUG_ERROR(" failed\n  !  mbedtls_pk_write_pubkey_der returned -0x%04x", (unsigned int) -ret);
     goto exit;
   }
 
-  if (ret > len) {
-    DEBUG_ERROR(" failed\n  !  outlen too small -0x%04x", (unsigned int) -ret);
+  if (ret > maxLen) {
+    DEBUG_ERROR(" failed\n  !  output buffer too small operation needs 0x%04x bytes", (unsigned int) ret);
+    ret = MBEDTLS_ERR_ECP_BUFFER_TOO_SMALL;
     goto exit;
   }
-  memcpy(der, &tmp[sizeof(tmp)- ret], ret);
+
+  /* Copy data from the end of mbedtls_buf buffer to der output */
+  memcpy(derKey, &mbedtls_buf[sizeof(mbedtls_buf) - ret], ret);
 
 exit:
   mbedtls_pk_free(&key);
@@ -255,48 +284,48 @@ int Arduino_UNOWIFIR4_SSE::sha256(const unsigned char* message, int len, unsigne
     DEBUG_ERROR(" failed\n  ! mbedtls_sha256_ret returned -0x%04x\n", (unsigned int) -ret);
     return ret;
   }
-  return 32;
+  return SSE_SHA256_LENGTH;
 }
 
-int Arduino_UNOWIFIR4_SSE::sign(const unsigned char* der, int len, const unsigned char* sha256, unsigned char* signature)
+int Arduino_UNOWIFIR4_SSE::sign(const unsigned char* derKey, int derLen, const unsigned char* sha256, unsigned char* sigRS)
 {
   int ret = 1;
   mbedtls_pk_context key;
   mbedtls_ctr_drbg_context ctr_drbg;
   mbedtls_entropy_context entropy;
-  unsigned char tmp[MBEDTLS_PK_SIGNATURE_MAX_SIZE] = {0};
-  unsigned char * p = (unsigned char *)&tmp[0];
+  unsigned char mbedtls_buf[MBEDTLS_PK_SIGNATURE_MAX_SIZE] = { 0 };
+  unsigned char *p = (unsigned char *)&mbedtls_buf[0];
   const char *pers = "gen_key";
+  size_t sig_size = 0;
 
   mbedtls_pk_init(&key);
   mbedtls_entropy_init(&entropy);
   mbedtls_ctr_drbg_init(&ctr_drbg);
 
-  if ((ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, (const unsigned char *) pers, strlen(pers))) != 0) {
+  if ((ret = mbedtls_ctr_drbg_seed(&ctr_drbg, mbedtls_entropy_func, &entropy, (const unsigned char*)pers, strlen(pers))) != 0) {
     DEBUG_ERROR(" failed\n  ! mbedtls_ctr_drbg_seed returned -0x%04x\n", (unsigned int) -ret);
     goto exit;
   }
 
   /* verify if work using only private key*/
-  if ((ret = mbedtls_pk_parse_key(&key, der, len, NULL, 0)) != 0) {
+  if ((ret = mbedtls_pk_parse_key(&key, derKey, derLen, NULL, 0)) != 0) {
     DEBUG_ERROR(" failed\n  !  mbedtls_pk_parse_key returned -0x%04x", (unsigned int) -ret);
     goto exit;
   }
 
-  size_t retSize;
-  if ((ret = mbedtls_pk_sign(&key, MBEDTLS_MD_SHA256, sha256, 0, tmp, &retSize, mbedtls_ctr_drbg_random, &ctr_drbg)) != 0) {
+  if ((ret = mbedtls_pk_sign(&key, MBEDTLS_MD_SHA256, sha256, 0, mbedtls_buf, &sig_size, mbedtls_ctr_drbg_random, &ctr_drbg)) != 0) {
     DEBUG_ERROR(" failed\n  !  mbedtls_pk_sign returned -0x%04x", (unsigned int) -ret);
     goto exit;
   }
 
 #if SSE_DEBUG_ENABLED
   log_v("SSE::sign: der signature");
-  log_buf_v(tmp, retSize);
+  log_buf_v(mbedtls_buf, sig_size);
 #endif
 
   /* Extract {r,s} values from DER signature */
-  extract_ecdsa_sig(&p, &tmp[retSize], signature, 32);
-  ret = 64;
+  extract_ecdsa_sig(&p, &mbedtls_buf[sig_size], sigRS, SSE_EC256_R_LENGTH);
+  ret = SSE_EC256_SIGNATURE_LENGTH;
 
 exit:
   mbedtls_ctr_drbg_free(&ctr_drbg);
@@ -304,42 +333,42 @@ exit:
   return ret;
 }
 
-int Arduino_UNOWIFIR4_SSE::verify(const unsigned char* der, int len, const unsigned char* sha256, unsigned char* signature)
+int Arduino_UNOWIFIR4_SSE::verify(const unsigned char* derKey, int derLen, const unsigned char* sha256, const unsigned char* sigRS)
 {
   int ret = 1;
   mbedtls_pk_context key;
-  unsigned char tmp[MBEDTLS_PK_SIGNATURE_MAX_SIZE] = {0};
+  unsigned char mbedtls_buf[MBEDTLS_PK_SIGNATURE_MAX_SIZE] = { 0 };
   mbedtls_mpi r,s;
-  size_t retSize = 0;
+  size_t sig_size = 0;
 
   mbedtls_mpi_init(&r);
   mbedtls_mpi_init(&s);
   mbedtls_pk_init(&key);
 
   /* Verify is only public key is needed */
-  if ((ret = mbedtls_pk_parse_public_key(&key, der, len)) != 0) {
+  if ((ret = mbedtls_pk_parse_public_key(&key, derKey, derLen)) != 0) {
     DEBUG_ERROR(" failed\n  !  mbedtls_pk_parse_public_key returned -0x%04x", (unsigned int) -ret);
     goto exit;
   }
 
 #if SSE_DEBUG_ENABLED
   log_v("SSE::verify: sha256");
-  log_buf_v((const uint8_t *)sha256, 32);
+  log_buf_v((const uint8_t *)sha256, SSE_SHA256_LENGTH);
   log_v("SSE::verify: compressed signature");
-  log_buf_v((const uint8_t *)signature, 64);
+  log_buf_v((const uint8_t *)sigRS, SSE_EC256_SIGNATURE_LENGTH);
 #endif
 
   /* Convert signature {r,s} values to DER */
-  mbedtls_mpi_read_binary( &r, signature, 32 );
-  mbedtls_mpi_read_binary( &s, signature + 32, 32 );
-  ecdsa_signature_to_asn1(&r, &s, tmp, MBEDTLS_PK_SIGNATURE_MAX_SIZE, &retSize);
+  mbedtls_mpi_read_binary( &r, sigRS, SSE_EC256_R_LENGTH );
+  mbedtls_mpi_read_binary( &s, sigRS + SSE_EC256_R_LENGTH, SSE_EC256_S_LENGTH );
+  ecdsa_signature_to_asn1(&r, &s, mbedtls_buf, MBEDTLS_PK_SIGNATURE_MAX_SIZE, &sig_size);
 
 #if SSE_DEBUG_ENABLED
   log_v("SSE::verify: der signature");
-  log_buf_v((const uint8_t *)tmp, retSize);
+  log_buf_v((const uint8_t *)mbedtls_buf, sig_size);
 #endif
 
-  if ((ret = mbedtls_pk_verify(&key, MBEDTLS_MD_SHA256, sha256, 32, tmp, retSize)) != 0) {
+  if ((ret = mbedtls_pk_verify(&key, MBEDTLS_MD_SHA256, sha256, SSE_SHA256_LENGTH, mbedtls_buf, sig_size)) != 0) {
     DEBUG_ERROR(" failed\n  !  mbedtls_pk_verify returned -0x%04x", (unsigned int) -ret);
     goto exit;
   }
