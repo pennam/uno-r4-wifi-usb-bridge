@@ -12,6 +12,7 @@ INCBIN(x509_crt_bundle, PATH_CERT_BUNDLE);
 
 #include "at_handler.h"
 #include "mbedtls/pem.h"
+#include "SSE.h"
 
 void CAtHandler::add_cmds_wifi_SSL() {
    /* ....................................................................... */
@@ -169,11 +170,11 @@ void CAtHandler::add_cmds_wifi_SSL() {
 
             /* Read private key from non volatile storage in DER format */
             std::vector<unsigned char> client_key_der;
-            int len = pref.getBytesLength(slot_num.c_str());
+            int len = sse.getBytesLength(slot_num.c_str());
             int ret = -1;
             client_key_der.resize(len);
-            if ((ret = pref.getBytes(slot_num.c_str(), client_key_der.data(), len)) < len) {
-               log_e(" failed\n  !  pref.getBytes returned -0x%04x", (unsigned int) -ret);
+            if ((ret = sse.getBytes(slot_num.c_str(), client_key_der.data(), len)) < len) {
+               log_e(" failed\n  !  sse.getBytes returned -0x%04x", (unsigned int) -ret);
                return chAT::CommandStatus::ERROR;
             }
 
