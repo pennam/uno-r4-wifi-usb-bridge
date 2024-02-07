@@ -119,7 +119,7 @@ void CAtHandler::add_cmds_se() {
             int ret = 0;
 
             std::vector<unsigned char> der;
-            der.resize(SSE_EC256_DER_PUB_KEY_LENGTH);
+            der.resize(SSE_EC256_DER_PRI_KEY_LENGTH);
             if ((len = Arduino_UNOWIFIR4_SSE::generateECKeyPair(der.data(), static_cast<int>(der.size()))) < 0) {
                DEBUG_ERROR(" failed\n  !  generateECKeyPair returned -0x%04x", (unsigned int) -ret);
                return chAT::CommandStatus::ERROR;
