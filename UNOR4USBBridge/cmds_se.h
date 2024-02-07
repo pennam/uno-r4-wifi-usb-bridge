@@ -2,7 +2,10 @@
 #define CMDS_SE_H
 
 #include "at_handler.h"
+#include <Preferences.h>
 #include "SSE.h"
+
+Preferences sse;
 
 void CAtHandler::add_cmds_se() {
 
@@ -21,15 +24,15 @@ void CAtHandler::add_cmds_se() {
             }
 
             /* Allow to call begin multiple times */
-            pref.end();
+            sse.end();
 
             bool readOnly = strtol(parser.args[1].c_str(), NULL, 10) != 0;
             auto &partition = parser.args[2];
             String error = String();
             if (partition.empty()) {
-               error = String(pref.begin(name.c_str(), readOnly)) + "\r\n";
+               error = String(sse.begin(name.c_str(), readOnly)) + "\r\n";
             } else {
-               error = String(pref.begin(name.c_str(), readOnly, partition.c_str())) + "\r\n";
+               error = String(sse.begin(name.c_str(), readOnly, partition.c_str())) + "\r\n";
             }
 
             srv.write_response_prompt();
@@ -47,7 +50,7 @@ void CAtHandler::add_cmds_se() {
    /* ....................................................................... */
       switch (parser.cmd_mode) {
          case chAT::CommandMode::Run: {
-            pref.end();
+            sse.end();
             srv.write_response_prompt();
             srv.write_str("0");
             srv.write_line_end();
@@ -124,8 +127,8 @@ void CAtHandler::add_cmds_se() {
                return chAT::CommandStatus::ERROR;
             }
             der.resize(len);
-            if ((ret = pref.putBytes(key.c_str(), der.data(), len)) != len) {
-              DEBUG_ERROR(" failed\n  !  pref.putBytes returned -0x%04x", (unsigned int) -ret);
+            if ((ret = sse.putBytes(key.c_str(), der.data(), len)) != len) {
+              DEBUG_ERROR(" failed\n  !  sse.putBytes returned -0x%04x", (unsigned int) -ret);
               return chAT::CommandStatus::ERROR;
             }
 #if SSE_DEBUG_ENABLED
@@ -166,10 +169,10 @@ void CAtHandler::add_cmds_se() {
             int len = 0;
 
             std::vector<unsigned char> der;
-            len = pref.getBytesLength(key.c_str());
+            len = sse.getBytesLength(key.c_str());
             der.resize(len);
-            if ((ret = pref.getBytes(key.c_str(), der.data(), len)) < len) {
-               DEBUG_ERROR(" failed\n  !  pref.getBytes returned -0x%04x", (unsigned int) -ret);
+            if ((ret = sse.getBytes(key.c_str(), der.data(), len)) < len) {
+               DEBUG_ERROR(" failed\n  !  sse.getBytes returned -0x%04x", (unsigned int) -ret);
                return chAT::CommandStatus::ERROR;
             }
 #if SSE_DEBUG_ENABLED
@@ -248,10 +251,10 @@ void CAtHandler::add_cmds_se() {
 
             /* Read private key from non volatile storage */
             std::vector<unsigned char> der;
-            len = pref.getBytesLength(key.c_str());
+            len = sse.getBytesLength(key.c_str());
             der.resize(len);
-            if ((ret = pref.getBytes(key.c_str(), der.data(), len)) < len) {
-               DEBUG_ERROR(" failed\n  !  pref.getBytes returned -0x%04x", (unsigned int) -ret);
+            if ((ret = sse.getBytes(key.c_str(), der.data(), len)) < len) {
+               DEBUG_ERROR(" failed\n  !  sse.getBytes returned -0x%04x", (unsigned int) -ret);
                return chAT::CommandStatus::ERROR;
             }
 
@@ -348,7 +351,7 @@ void CAtHandler::add_cmds_se() {
             std::vector<unsigned char> data;
             data.resize(32);
             if ((ret = Arduino_UNOWIFIR4_SSE::sha256(se_buf.data(), se_buf.size(), data.data())) != 32) {
-               DEBUG_ERROR(" failed\n  !  pref.getBytes returned -0x%04x", (unsigned int) -ret);
+               DEBUG_ERROR(" failed\n  !  sse.getBytes returned -0x%04x", (unsigned int) -ret);
             }
 
 #if SSE_DEBUG_ENABLED
@@ -389,7 +392,7 @@ void CAtHandler::add_cmds_se() {
                } while (offset < value);
             }
             srv.continue_read();
-            String error = String(pref.putBytes(key.c_str(), se_buf.data(), value)) + "\r\n";
+            String error = String(sse.putBytes(key.c_str(), se_buf.data(), value)) + "\r\n";
 
 #if SSE_DEBUG_ENABLED
             log_v("_SOFTSE_WRITE_SLOT: input data");
@@ -418,9 +421,9 @@ void CAtHandler::add_cmds_se() {
             auto &key = parser.args[0];
             std::vector<uint8_t> data;
 
-            int len = pref.getBytesLength(key.c_str());
+            int len = sse.getBytesLength(key.c_str());
             data.resize(len);
-            pref.getBytes(key.c_str(), data.data(), len);
+            sse.getBytes(key.c_str(), data.data(), len);
             srv.write_response_prompt();
             srv.write_str(String(len).c_str());
             srv.write_str("|");
