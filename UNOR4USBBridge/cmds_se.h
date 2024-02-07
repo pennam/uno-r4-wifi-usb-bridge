@@ -2,10 +2,8 @@
 #define CMDS_SE_H
 
 #include "at_handler.h"
-#include <Preferences.h>
 #include "SSE.h"
 
-Preferences sse;
 
 void CAtHandler::add_cmds_se() {
 

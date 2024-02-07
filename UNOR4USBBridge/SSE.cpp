@@ -12,7 +12,6 @@
    INCLUDE
  ******************************************************************************/
 #include <Arduino_DebugUtils.h>
-#include <Preferences.h>
 
 #include "mbedtls/pk.h"
 #include "mbedtls/ctr_drbg.h"
@@ -24,8 +23,6 @@
 #include "mbedtls/sha256.h"
 
 #include "SSE.h"
-
-extern Preferences pref;
 
 // New implementation from mbedtls not merged https://github.com/Mbed-TLS/mbedtls/pull/8703/files
 
@@ -351,3 +348,5 @@ exit:
   mbedtls_pk_free(&key);
   return ret;
 }
+
+Preferences sse;
