@@ -68,7 +68,6 @@ void CAtHandler::add_cmds_wifi_SSL() {
                return chAT::CommandStatus::ERROR;
             }
 
-            bool ca_root_custom = false;
             int ca_root_size = 0;
             if (parser.args.size() >= 2){
                auto &ca_root_size_str = parser.args[1];
@@ -80,8 +79,6 @@ void CAtHandler::add_cmds_wifi_SSL() {
             }
 
             if(ca_root_custom) {
-
-
                cert_buf = srv.inhibit_read(ca_root_size);
                size_t offset = cert_buf.size();
                
@@ -204,6 +201,8 @@ void CAtHandler::add_cmds_wifi_SSL() {
             /* Set client key */
             the_client.sslclient->setPrivateKey((const char *)client_key_pem.data());
 
+            client_cert = true;
+
             return chAT::CommandStatus::OK;
          }
          default:
@@ -277,6 +276,19 @@ void CAtHandler::add_cmds_wifi_SSL() {
                return chAT::CommandStatus::ERROR;
             }
 
+            /* Set custom root ca */
+            if (ca_root_custom) {
+               the_client.sslclient->setCACert((const char *)cert_buf.data());
+            }
+            /* Default ca bundle is configured automatically on connect by the WiFiSSLClient */
+
+            if (client_cert) {
+              /* Set client certificate */
+              the_client.sslclient->setCertificate((const char *)client_cert_pem.data());
+              /* Set client key */
+              the_client.sslclient->setPrivateKey((const char *)client_key_pem.data());
+            }
+
             if (!the_client.sslclient->connect(host.c_str(), atoi(port.c_str()))) {
                return chAT::CommandStatus::ERROR;
             }
@@ -324,6 +336,19 @@ void CAtHandler::add_cmds_wifi_SSL() {
             IPAddress address;
             if(!address.fromString(hostip.c_str())) {
                return chAT::CommandStatus::ERROR;
+            }
+
+            /* Set custom root ca */
+            if (ca_root_custom) {
+               the_client.sslclient->setCACert((const char *)cert_buf.data());
+            }
+            /* Default ca bundle is configured automatically on connect by the WiFiSSLClient */
+
+            if (client_cert) {
+              /* Set client certificate */
+              the_client.sslclient->setCertificate((const char *)client_cert_pem.data());
+              /* Set client key */
+              the_client.sslclient->setPrivateKey((const char *)client_key_pem.data());
             }
 
             if (!the_client.sslclient->connect(address, atoi(hostport.c_str()))) {
@@ -379,6 +404,19 @@ void CAtHandler::add_cmds_wifi_SSL() {
               if (t > 0) {
                 timeout = t;
               }
+            }
+
+            /* Set custom root ca */
+            if (ca_root_custom) {
+               the_client.sslclient->setCACert((const char *)cert_buf.data());
+            }
+            /* Default ca bundle is configured automatically on connect by the WiFiSSLClient */
+
+            if (client_cert) {
+              /* Set client certificate */
+              the_client.sslclient->setCertificate((const char *)client_cert_pem.data());
+              /* Set client key */
+              the_client.sslclient->setPrivateKey((const char *)client_key_pem.data());
             }
 
             if (!the_client.sslclient->connect(host.c_str(), atoi(port.c_str()), timeout)) {

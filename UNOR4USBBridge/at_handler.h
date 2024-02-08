@@ -85,10 +85,15 @@ private:
    void add_cmds_preferences();
    void add_cmds_se();
 public:
+   /* Used by cmds_wifi_SSL */
    std::vector<std::uint8_t> cert_buf;
-   std::vector<std::uint8_t> se_buf;
    std::vector<std::uint8_t> client_cert_pem;
    std::vector<std::uint8_t> client_key_pem;
+   bool client_cert = false;
+   bool ca_root_custom = false;
+
+   /* Used by cmds_se */
+   std::vector<std::uint8_t> se_buf;
 
    /* Used by cmds_ota */
    std::vector<std::uint8_t> ota_cert_buf;
